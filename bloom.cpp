@@ -1,7 +1,8 @@
 #include <iostream>
+#include <set>
+
 #include <memory>
 #include <algorithm>
-
 #include <cstdint>
 #include <cmath>
 
@@ -12,14 +13,18 @@ namespace lvldb
 
 class bloom_filter_t
 {
-	bloom_filter_t():
-		// XXX
-		num_hashes_(7),
-		num_buckets_(ceil(100 / 8.0) * 8),
-		indexes_(new uint8_t[num_hashes_]),
-		buckets_(new uint8_t[num_buckets_ / 8])
-		// XXX
-	{ }
+	public:
+
+	bloom_filter_t(size_t num_keys, double error_rate)
+	{
+		auto filter = calculate_filter(num_keys, error_rate);
+
+		num_hashes_  = filter.first;
+		num_buckets_ = filter.second;
+
+		indexes_ = std::unique_ptr<size_t[]>(new size_t[num_hashes_]);
+		buckets_ = std::unique_ptr<uint8_t[]>(new uint8_t[num_buckets_ / 8]);
+	}
 
 	void insert(const void *key, size_t len)
 	{
@@ -46,9 +51,25 @@ class bloom_filter_t
 
 	private:
 
-	size_t num_hashes_, num_buckets_;
-	std::unique_ptr<uint8_t[]> indexes_, buckets_;
-	const uint32_t seed_ = M_E * 1000000000;
+	size_t                     num_hashes_, num_buckets_;
+	std::unique_ptr<size_t[]>  indexes_;
+	std::unique_ptr<uint8_t[]> buckets_;
+	const uint32_t             seed_ = M_E * 1000000000;
+
+	// Ref.: Bloom filter, Wikipedia
+	//       http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
+	static std::pair<size_t, size_t> calculate_filter(size_t num_keys, double error_rate)
+	{
+		double log2       = log(2);
+		size_t total_bits = -ceil(num_keys * log(error_rate) / (log2 * log2));
+
+		// Round to 8 for the byte array's size
+		total_bits = ceil(total_bits / 8.0) * 8;
+
+		size_t optimal_num_hashes = ceil(log2 * total_bits / num_keys);
+
+		return {optimal_num_hashes, total_bits};
+	}
 
 	// Ref.: Adam Kirsch and Michael Mitzenmacher
 	//       Less Hashing, Same Performance: Building a Better Bloom Filter
