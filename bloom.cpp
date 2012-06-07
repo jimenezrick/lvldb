@@ -1,5 +1,6 @@
 #include <iostream>
 #include <set>
+#include <cassert>
 
 #include <memory>
 #include <algorithm>
@@ -33,7 +34,7 @@ class bloom_filter_t
 			set_bit(indexes_[i]);
 	}
 
-	bool member(const void *key, size_t len)
+	bool member(const void *key, size_t len) const
 	{
 		generate_indexes(key, len);
 		for (size_t i = 0; i < num_hashes_; ++i) {
@@ -49,6 +50,30 @@ class bloom_filter_t
 		std::fill_n(buckets_.get(), num_buckets_ / 8, 0);
 	}
 
+	// See: Brian Kernighan's population count
+	size_t count() const
+	{
+		size_t count = 0;
+
+		for (size_t i = 0; i < num_buckets_ / 8; ++i) {
+			for (uint8_t byte = buckets_[i]; byte; ++count)
+				byte &= byte - 1;
+		}
+
+		return count;
+	}
+
+#ifndef NDEBUG
+	void print_debug_info() const
+	{
+		std::cout << "=== bloom_filter_t ===\n";
+		std::cout << "num_hashes_  = " << num_hashes_  << "\n";
+		std::cout << "num_buckets_ = " << num_buckets_ << "\n";
+		std::cout << "seed_        = " << seed_        << "\n";
+		std::cout << "count()      = " << count()      << "\n";
+	}
+#endif
+
 	private:
 
 	size_t                     num_hashes_, num_buckets_;
@@ -56,8 +81,8 @@ class bloom_filter_t
 	std::unique_ptr<uint8_t[]> buckets_;
 	const uint32_t             seed_ = M_E * 1000000000;
 
-	// Ref.: Bloom filter, Wikipedia
-	//       http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
+	// See: Bloom filter, Wikipedia
+	//      http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
 	static std::pair<size_t, size_t> calculate_filter(size_t num_keys, double error_rate)
 	{
 		double log2       = log(2);
@@ -71,9 +96,9 @@ class bloom_filter_t
 		return {optimal_num_hashes, total_bits};
 	}
 
-	// Ref.: Adam Kirsch and Michael Mitzenmacher
-	//       Less Hashing, Same Performance: Building a Better Bloom Filter
-	void generate_indexes(const void *key, size_t len)
+	// See: Adam Kirsch and Michael Mitzenmacher
+	//      Less Hashing, Same Performance: Building a Better Bloom Filter
+	void generate_indexes(const void *key, size_t len) const
 	{
 		uint64_t hash[2];
 
@@ -87,7 +112,7 @@ class bloom_filter_t
 		buckets_[n / 8] |= (1 << n % 8);
 	}
 
-	inline int get_bit(size_t n)
+	inline int get_bit(size_t n) const
 	{
 		return buckets_[n / 8] & (1 << n % 8);
 	}
@@ -97,6 +122,18 @@ class bloom_filter_t
 
 int main(int argc, char *argv[])
 {
-	argv[0][0] = argc;
+	lvldb::bloom_filter_t bloom(10000, 0.01);
+
+	bloom.print_debug_info();
+	bloom.insert("foo", 3);
+	bloom.insert("bar", 3);
+	bloom.insert("fur", 3);
+	bloom.print_debug_info();
+
+	assert(bloom.member("foo", 3));
+	assert(bloom.member("bar", 3));
+	assert(bloom.member("fur", 3));
+	assert(bloom.member("123", 3) == false);
+
 	return 0;
 }
