@@ -40,7 +40,7 @@ void bloom_filter_t::clear()
 	std::fill_n(buckets_.get(), num_buckets_ / 8, 0);
 }
 
-// See: Brian Kernighan's population count
+// Ref: Brian Kernighan's population count
 size_t bloom_filter_t::count() const
 {
 	size_t count = 0;
@@ -64,7 +64,7 @@ void bloom_filter_t::print_debug_info() const
 }
 #endif
 
-// See: Bloom filter, Wikipedia
+// Ref: Bloom filter, Wikipedia
 //      http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
 std::pair<size_t, size_t> bloom_filter_t::calculate_filter(size_t num_keys, double error_rate)
 {
@@ -79,7 +79,7 @@ std::pair<size_t, size_t> bloom_filter_t::calculate_filter(size_t num_keys, doub
 	return {optimal_num_hashes, total_bits};
 }
 
-// See: Adam Kirsch and Michael Mitzenmacher
+// Ref: Adam Kirsch and Michael Mitzenmacher
 //      Less Hashing, Same Performance: Building a Better Bloom Filter
 void bloom_filter_t::generate_indexes(const void *key, size_t len) const
 {
