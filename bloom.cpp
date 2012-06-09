@@ -90,12 +90,12 @@ void bloom_filter_t::generate_indexes(const void *key, size_t len) const
 		indexes_[i] = (hash[0] + i * hash[1]) % num_buckets_;
 }
 
-void bloom_filter_t::set_bit(size_t n)
+inline void bloom_filter_t::set_bit(size_t n)
 {
 	buckets_[n / 8] |= (1 << n % 8);
 }
 
-int bloom_filter_t::get_bit(size_t n) const
+inline int bloom_filter_t::get_bit(size_t n) const
 {
 	return buckets_[n / 8] & (1 << n % 8);
 }

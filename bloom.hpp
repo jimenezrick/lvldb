@@ -30,8 +30,8 @@ class bloom_filter_t
 
 	static std::pair<size_t, size_t> calculate_filter(size_t num_keys, double error_rate);
 	void generate_indexes(const void *key, size_t len) const;
-	inline void set_bit(size_t n);
-	inline int get_bit(size_t n) const;
+	void set_bit(size_t n);
+	int get_bit(size_t n) const;
 };
 
 }
