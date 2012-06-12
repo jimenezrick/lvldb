@@ -83,9 +83,7 @@ class fence_t
 		else {
 			check_consistency();
 
-			// XXX: Copia local de las variables atomicas
-			// XXX: Aritmetica modular del anillo
-			while (next_ == next_fence_->seq_)
+			while (disruptor_.get_index(next_) == disruptor_.get_index(next_fence_->seq_))
 				pause_thread();
 			task_seq = next_++;
 
@@ -95,15 +93,14 @@ class fence_t
 
 	inline void release_slot(seq_t task_seq)
 	{
-		seq_t expected = task_seq;
+		seq_t expected;
 
 		check_consistency();
 
-		// XXX: Copia local de las variables atomicas
-		// XXX: Aritmetica modular del anillo
-		while (seq_ + 1 == next_fence_->seq_)
+		while (disruptor_.get_index(seq_ + 1) == disruptor_.get_index(next_fence_->seq_))
 			pause_thread();
 
+		expected = task_seq;
 		while (!seq_.compare_exchange_strong(expected, task_seq + 1)) {
 			expected = task_seq;
 			pause_thread();
@@ -204,7 +201,7 @@ void fun4(lvldb::fence_t<long> *f)
 
 int main(int argc, char *argv[])
 {
-	lvldb::disruptor_t<long> d(4);
+	lvldb::disruptor_t<long> d(8);
 	lvldb::fence_t<long>     f1(d, lvldb::fence_t<long>::producer), f2(d, lvldb::fence_t<long>::consumer);
 	lvldb::fence_t<long>     f3(d, lvldb::fence_t<long>::consumer), f4(d, lvldb::fence_t<long>::consumer);
 
