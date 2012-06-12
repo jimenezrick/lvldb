@@ -86,15 +86,25 @@ class fence_t
 	inline T acquire_slot(seq_t &task_seq)
 	{
 		if (type_ == producer && seq_ == 0 && next_ == 0) {
+			// XXX: Condicion de carrera, usar compare_exchange_strong()
 			task_seq = next_++;
 
 			return disruptor_[task_seq];
 		} else {
 			check_consistency();
 
-			while (disruptor_.get_index(next_) == disruptor_.get_index(next_fence_->seq_))
-				pause_thread();
-			task_seq = next_++;
+			while (true) {
+				seq_t next = next_;
+
+				while (disruptor_.get_index(next) == disruptor_.get_index(next_fence_->seq_))
+					pause_thread();
+
+				if (!next_.compare_exchange_strong(next, next + 1))
+					continue;
+
+				task_seq = next;
+				break;
+			}
 
 			check_consistency();
 
@@ -108,7 +118,7 @@ class fence_t
 
 		check_consistency();
 
-		while (disruptor_.get_index(seq_ + 1) == disruptor_.get_index(next_fence_->seq_))
+		while (disruptor_.get_index(task_seq + 1) == disruptor_.get_index(next_fence_->seq_))
 			pause_thread();
 
 		expected = task_seq;
@@ -212,15 +222,14 @@ int main(int argc, char *argv[])
 {
 	lvldb::disruptor_t<long> d(8);
 	lvldb::fence_t<long>     f1(d, lvldb::fence_t<long>::producer), f2(d, lvldb::fence_t<long>::consumer);
-	lvldb::fence_t<long>     f3(d, lvldb::fence_t<long>::consumer), f4(d, lvldb::fence_t<long>::consumer);
+	lvldb::fence_t<long>     f3(d, lvldb::fence_t<long>::consumer);
 
-	f4.set_next_fence(&f3);
 	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);
-	f1.set_next_fence(&f4);
+	f1.set_next_fence(&f3);
 
-	std::thread t4(&fun4, &f4);
-	std::thread t3(&fun3, &f3);
+	std::thread t4(&fun4, &f3);
+	std::thread t3(&fun3, &f2);
 	std::thread t2(&fun2, &f2);
 	std::thread t1(&fun1, &f1);
 
