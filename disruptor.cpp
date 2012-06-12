@@ -44,7 +44,7 @@ class disruptor_t
 
 
 
-	// Fast algorithm to find the modulo a power of two
+	// Ref: Fast algorithm to find the modulo a power of two
 	inline size_t get_index(size_t n)
 	{
 		return n & (size_ - 1);

@@ -1,6 +1,7 @@
 #ifndef BLOOM_HPP
 #define BLOOM_HPP
 
+#include <ostream>
 #include <memory>
 #include <cstdint>
 #include <cmath>
@@ -17,9 +18,8 @@ class bloom_filter_t
 	bool member(const void *key, size_t len) const;
 	void clear();
 	size_t count() const;
-#ifndef NDEBUG
-	void print_debug_info() const;
-#endif
+
+	friend std::ostream &operator<<(std::ostream &stream, const bloom_filter_t &filter);
 
 	private:
 

@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
 	assert(bloom.member("fur", 3));
 	assert(bloom.member("x", 1) == false);
 
-	bloom.print_debug_info();
+	std::cout << bloom;
 	std::cout << std::endl;
 	bloom.clear();
 

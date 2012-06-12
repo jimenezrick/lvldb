@@ -1,10 +1,10 @@
-#include <iostream>
 #include <algorithm>
 
 #include "bloom.hpp"
 #include "murmurhash/MurmurHash3.h"
 
-using namespace lvldb;
+namespace lvldb
+{
 
 bloom_filter_t::bloom_filter_t(size_t num_keys, double error_rate)
 {
@@ -53,16 +53,16 @@ size_t bloom_filter_t::count() const
 	return count;
 }
 
-#ifndef NDEBUG
-void bloom_filter_t::print_debug_info() const
+std::ostream &operator<<(std::ostream &stream, const bloom_filter_t &filter)
 {
-	std::cout << "=== bloom_filter_t ===\n";
-	std::cout << "num_hashes_  = " << num_hashes_  << "\n";
-	std::cout << "num_buckets_ = " << num_buckets_ << "\n";
-	std::cout << "seed_        = " << seed_        << "\n";
-	std::cout << "count()      = " << count()      << "\n";
+	stream << "=== bloom_filter_t ===\n";
+	stream << "num_hashes_  = " << filter.num_hashes_  << "\n";
+	stream << "num_buckets_ = " << filter.num_buckets_ << "\n";
+	stream << "seed_        = " << filter.seed_        << "\n";
+	stream << "count()      = " << filter.count()      << "\n";
+
+	return stream;
 }
-#endif
 
 // Ref: Bloom filter, Wikipedia
 //      http://en.wikipedia.org/wiki/Bloom_filter#Probability_of_false_positives
@@ -98,4 +98,6 @@ inline void bloom_filter_t::set_bit(size_t n)
 inline int bloom_filter_t::get_bit(size_t n) const
 {
 	return buckets_[n / 8] & (1 << n % 8);
+}
+
 }
