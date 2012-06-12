@@ -69,13 +69,13 @@ class fence_t
 {
 	public:
 
-	enum fence_type_t {producer, consumer};
+	enum type_t {producer, consumer};
 
-	fence_t(fence_type_t fence_type):
+	fence_t(type_t type):
+		type_(type),
 		seq_(0),
 		next_(0),
-		next_fence_(nullptr),
-		fence_type_(fence_type)
+		next_fence_(nullptr)
 	{
 		assert(sizeof(fence_t) >= sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
 	}
@@ -87,7 +87,7 @@ class fence_t
 
 	inline void acquire_slot(seq_t &task_seq)
 	{
-		if (fence_type_ == producer && seq_ == 0 && next_ == 0)
+		if (type_ == producer && seq_ == 0 && next_ == 0)
 			task_seq = next_++;
 		else {
 			check_consistency();
@@ -124,9 +124,9 @@ class fence_t
 	private:
 
 	char           padding_[64];
+	type_t         type_;
 	atomic_seq_t   seq_, next_;
 	const fence_t *next_fence_;
-	fence_type_t   fence_type_;
 
 	inline void pause_thread()
 	{
@@ -136,11 +136,14 @@ class fence_t
 
 	inline void check_consistency()
 	{
-		assert(next_fence_ != nullptr);
 		assert(seq_ <= next_);
+		assert(next_fence_ != nullptr);
 
 		if (seq_ != 0)
 			assert(seq_ != next_fence_->seq_);
+
+		if (type_ == producer)
+			assert(next_fence_->type_ == consumer);
 	}
 };
 
@@ -172,7 +175,6 @@ void fun2(fence_t *f)
 
 	while (true) {
 		f->acquire_slot(s);
-		//sleep(1);
 		f->release_slot(s);
 
 		flockfile(stdout);
@@ -181,19 +183,36 @@ void fun2(fence_t *f)
 	}
 }
 
+void fun3(fence_t *f)
+{
+	seq_t s;
+
+	while (true) {
+		f->acquire_slot(s);
+		f->release_slot(s);
+
+		flockfile(stdout);
+		std::cout << "t3 s = " << s << std::endl;
+		funlockfile(stdout);
+	}
+}
+
 int main()
 {
 	disruptor_t<char> d(1024);
-	fence_t f1(fence_t::producer), f2(fence_t::consumer);
+	fence_t f1(fence_t::producer), f2(fence_t::consumer), f3(fence_t::consumer);
 
-	f1.set_next_fence(&f2);
+	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);
+	f1.set_next_fence(&f3);
 
-	std::thread t1(&fun1, &f1);
+	std::thread t3(&fun3, &f3);
 	std::thread t2(&fun2, &f2);
+	std::thread t1(&fun1, &f1);
 
 	t1.join();
 	t2.join();
+	t3.join();
 
 	return 0;
 }
