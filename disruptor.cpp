@@ -85,31 +85,34 @@ class fence_t
 
 	inline T acquire_slot(seq_t &task_seq)
 	{
-		if (type_ == producer && seq_ == 0 && next_ == 0) {
-			// XXX: Condicion de carrera, usar compare_exchange_strong()
-			task_seq = next_++;
+		if (type_ == producer && next_ == 0) {
+			seq_t expected = 0;
 
-			return disruptor_[task_seq];
-		} else {
-			check_consistency();
+			if (next_.compare_exchange_strong(expected, 1)) {
+				task_seq = 0;
 
-			while (true) {
-				seq_t next = next_;
-
-				while (disruptor_.get_index(next) == disruptor_.get_index(next_fence_->seq_))
-					pause_thread();
-
-				if (!next_.compare_exchange_strong(next, next + 1))
-					continue;
-
-				task_seq = next;
-				break;
+				return disruptor_[task_seq];
 			}
-
-			check_consistency();
-
-			return disruptor_[task_seq];
 		}
+
+		check_consistency();
+
+		while (true) {
+			seq_t next = next_;
+
+			while (disruptor_.get_index(next) == disruptor_.get_index(next_fence_->seq_))
+				pause_thread();
+
+			if (!next_.compare_exchange_strong(next, next + 1))
+				continue;
+
+			task_seq = next;
+			break;
+		}
+
+		check_consistency();
+
+		return disruptor_[task_seq];
 	}
 
 	inline void release_slot(seq_t task_seq)
