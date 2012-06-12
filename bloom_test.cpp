@@ -27,9 +27,9 @@ int main(int argc, char *argv[])
 	std::cout << std::endl;
 	bloom.clear();
 
-	for (int i = 0; i < TEST_SIZE; ++i) {
+	for (int i = 0; i < TEST_SIZE; i++) {
 		if (bloom.member(&i, sizeof(i)))
-			++false_positives;
+			false_positives++;
 
 		set.insert(i);
 		bloom.insert(&i, sizeof(i));
@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
 	bloom.clear();
 	false_positives = 0;
 
-	for (int i = 0; i < TEST_SIZE; ++i) {
+	for (int i = 0; i < TEST_SIZE; i++) {
 		if (i % 3 != 0 && i % 7 != 0) {
 			set.insert(i);
 			bloom.insert(&i, sizeof(i));
@@ -57,11 +57,11 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	for (int i = 0; i < TEST_SIZE; ++i) {
+	for (int i = 0; i < TEST_SIZE; i++) {
 		if (set.find(i) != set.end())
 			assert(bloom.member(&i, sizeof(i)));
 		else if (bloom.member(&i, sizeof(i)))
-			++false_positives;
+			false_positives++;
 	}
 
 	false_positives_rate = (double) false_positives / (double) TEST_SIZE;

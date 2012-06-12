@@ -20,14 +20,14 @@ bloom_filter_t::bloom_filter_t(size_t num_keys, double error_rate)
 void bloom_filter_t::insert(const void *key, size_t len)
 {
 	generate_indexes(key, len);
-	for (size_t i = 0; i < num_hashes_; ++i)
+	for (size_t i = 0; i < num_hashes_; i++)
 		set_bit(indexes_[i]);
 }
 
 bool bloom_filter_t::member(const void *key, size_t len) const
 {
 	generate_indexes(key, len);
-	for (size_t i = 0; i < num_hashes_; ++i) {
+	for (size_t i = 0; i < num_hashes_; i++) {
 		if (get_bit(indexes_[i]) == 0)
 			return false;
 	}
@@ -45,8 +45,8 @@ size_t bloom_filter_t::count() const
 {
 	size_t count = 0;
 
-	for (size_t i = 0; i < num_buckets_ / 8; ++i) {
-		for (uint8_t byte = buckets_[i]; byte; ++count)
+	for (size_t i = 0; i < num_buckets_ / 8; i++) {
+		for (uint8_t byte = buckets_[i]; byte; count++)
 			byte &= byte - 1;
 	}
 
@@ -86,7 +86,7 @@ void bloom_filter_t::generate_indexes(const void *key, size_t len) const
 	uint64_t hash[2];
 
 	MurmurHash3_x64_128(key, len, seed_, hash);
-	for (size_t i = 0; i < num_hashes_; ++i)
+	for (size_t i = 0; i < num_hashes_; i++)
 		indexes_[i] = (hash[0] + i * hash[1]) % num_buckets_;
 }
 

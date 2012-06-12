@@ -21,44 +21,49 @@
 
 
 
-typedef unsigned long slot_t;
-typedef unsigned long seq_t;
+typedef unsigned long      seq_t;
 typedef std::atomic<seq_t> atomic_seq_t;
 
-// Slot of type T:
-// template<typename T>
+template<typename T>
 class disruptor_t
 {
 	public:
-	std::unique_ptr<long[]>  ring_;
 
-	const size_t size_ = 1024;
+	typedef T slot_t;
 
-	disruptor_t()
+	disruptor_t(size_t size):
+		size_(size),
+		ring_(std::unique_ptr<T[]>(new T[size]))
 	{
-		ring_ = std::unique_ptr<long[]>(new long[size_]);
+		// Test if size is a power of two
+		assert((size & (size - 1)) == 0);
 	}
 
-
-
-
-
-
-	// Ref: Fast algorithm to find the modulo a power of two
-	inline size_t get_index(size_t n)
+	inline size_t get_index(seq_t seq)
 	{
-		return n & (size_ - 1);
+		// Fast algorithm to find the modulo of a power of two
+		return seq & (size_ - 1);
 	}
+
+	inline T operator[](seq_t seq) const
+	{
+		return ring_[get_index(seq)];
+	}
+
+	inline T &operator[](seq_t seq)
+	{
+		return ring_[get_index(seq)];
+	}
+
+	private:
+
+	const size_t         size_;
+	std::unique_ptr<T[]> ring_;
 };
-
-
 
 class task_t
 {
 };
-
-
-
 
 class fence_t
 {
@@ -178,6 +183,7 @@ void fun2(fence_t *f)
 
 int main()
 {
+	disruptor_t<char> d(1024);
 	fence_t f1(fence_t::producer), f2(fence_t::consumer);
 
 	f1.set_next_fence(&f2);
