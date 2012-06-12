@@ -1,5 +1,7 @@
 #include <memory>
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 #include <cassert>
 
 #include <unistd.h>
@@ -14,8 +16,6 @@ template<typename T>
 class disruptor_t
 {
 	public:
-
-	typedef T slot_t;
 
 	disruptor_t(size_t size):
 		size_(size),
@@ -68,7 +68,14 @@ class fence_t
 		type_(type),
 		next_fence_(nullptr)
 	{
-		assert(sizeof(fence_t) >= sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
+		long line_size;
+
+		if ((line_size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE)) == -1) {
+			perror("sysconf");
+			exit(EXIT_FAILURE);
+		}
+
+		assert(sizeof(fence_t) >= static_cast<size_t>(line_size));
 	}
 
 	void set_next_fence(const fence_t *next_fence)
@@ -76,11 +83,13 @@ class fence_t
 		next_fence_ = next_fence;
 	}
 
-	inline void acquire_slot(seq_t &task_seq)
+	inline T acquire_slot(seq_t &task_seq)
 	{
-		if (type_ == producer && seq_ == 0 && next_ == 0)
+		if (type_ == producer && seq_ == 0 && next_ == 0) {
 			task_seq = next_++;
-		else {
+
+			return disruptor_[task_seq];
+		} else {
 			check_consistency();
 
 			while (disruptor_.get_index(next_) == disruptor_.get_index(next_fence_->seq_))
@@ -88,6 +97,8 @@ class fence_t
 			task_seq = next_++;
 
 			check_consistency();
+
+			return disruptor_[task_seq];
 		}
 	}
 
@@ -114,12 +125,15 @@ class fence_t
 	char            padding_[64];
 	atomic_seq_t    seq_, next_;
 	disruptor_t<T> &disruptor_;
-	type_t          type_;
+	const type_t    type_;
 	const fence_t  *next_fence_;
 
 	inline void pause_thread()
 	{
+		//
 		// XXX: Pausa con espera exponencial tras varias iteraciones
+		//      Crear 2 atributos: atomic_retries_, atomic_sleep_
+		//
 		__asm__ __volatile__("pause");
 	}
 
@@ -127,12 +141,8 @@ class fence_t
 	{
 		assert(seq_ <= next_);
 		assert(next_fence_ != nullptr);
-
-		if (seq_ != 0)
-			assert(seq_ != next_fence_->seq_);
-
-		if (type_ == producer)
-			assert(next_fence_->type_ == consumer);
+		assert(seq_ != 0 ? seq_ != next_fence_->seq_ : true);
+		assert(type_ == producer ? next_fence_->type_ == consumer : true);
 	}
 };
 
@@ -140,7 +150,6 @@ class fence_t
 
 #include <iostream>
 #include <thread>
-#include <cstdio>
 
 void fun1(lvldb::fence_t<long> *f)
 {
