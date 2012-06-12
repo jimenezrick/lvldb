@@ -52,6 +52,11 @@ class task_t
 	// XXX XXX XXX
 	// XXX XXX XXX
 	// XXX XXX XXX
+	//
+	// Usar aqui acquire_slot() y release_slot()
+	// Implementar un metodo virtual que trabaje sobre el slot
+	//
+	// Seguir con el ejemplo y que cada thread modifique el slot del ring y comprobar
 };
 
 template<typename T>
@@ -147,7 +152,9 @@ class fence_t
 		// XXX: Pausa con espera exponencial tras varias iteraciones
 		//      Crear 2 atributos: atomic_retries_, atomic_sleep_
 		//
-		__asm__ __volatile__("pause");
+		//      Despes de dormir bastante, comprobar una variable global atomic por si deben finalizar los threads
+		//
+		__asm__ __volatile__("pause" ::: "memory");
 	}
 
 	inline void check_consistency()
