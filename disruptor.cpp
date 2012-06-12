@@ -1,25 +1,11 @@
-#if 0
-#define NDEBUG
-#endif
-
 #include <memory>
 #include <atomic>
 #include <cassert>
 
 #include <unistd.h>
 
-
-
-
-
-
-#include <iostream>
-#include <stdio.h>
-
-
-
-
-
+namespace lvldb
+{
 
 typedef unsigned long      seq_t;
 typedef std::atomic<seq_t> atomic_seq_t;
@@ -63,18 +49,23 @@ class disruptor_t
 
 class task_t
 {
+	// XXX XXX XXX
+	// XXX XXX XXX
+	// XXX XXX XXX
 };
 
+template<typename T>
 class fence_t
 {
 	public:
 
 	enum type_t {producer, consumer};
 
-	fence_t(type_t type):
-		type_(type),
+	fence_t(disruptor_t<T> &disruptor, type_t type):
 		seq_(0),
 		next_(0),
+		disruptor_(disruptor),
+		type_(type),
 		next_fence_(nullptr)
 	{
 		assert(sizeof(fence_t) >= sysconf(_SC_LEVEL1_DCACHE_LINESIZE));
@@ -123,10 +114,11 @@ class fence_t
 
 	private:
 
-	char           padding_[64];
-	type_t         type_;
-	atomic_seq_t   seq_, next_;
-	const fence_t *next_fence_;
+	char            padding_[64];
+	atomic_seq_t    seq_, next_;
+	disruptor_t<T> &disruptor_;
+	type_t          type_;
+	const fence_t  *next_fence_;
 
 	inline void pause_thread()
 	{
@@ -147,16 +139,15 @@ class fence_t
 	}
 };
 
+}
 
-
-
-
-
+#include <iostream>
 #include <thread>
+#include <cstdio>
 
-void fun1(fence_t *f)
+void fun1(lvldb::fence_t<long> *f)
 {
-	seq_t s;
+	lvldb::seq_t s;
 
 	while (true) {
 		f->acquire_slot(s);
@@ -169,9 +160,9 @@ void fun1(fence_t *f)
 	}
 }
 
-void fun2(fence_t *f)
+void fun2(lvldb::fence_t<long> *f)
 {
-	seq_t s;
+	lvldb::seq_t s;
 
 	while (true) {
 		f->acquire_slot(s);
@@ -183,9 +174,9 @@ void fun2(fence_t *f)
 	}
 }
 
-void fun3(fence_t *f)
+void fun3(lvldb::fence_t<long> *f)
 {
-	seq_t s;
+	lvldb::seq_t s;
 
 	while (true) {
 		f->acquire_slot(s);
@@ -197,15 +188,32 @@ void fun3(fence_t *f)
 	}
 }
 
-int main()
+void fun4(lvldb::fence_t<long> *f)
 {
-	disruptor_t<char> d(1024);
-	fence_t f1(fence_t::producer), f2(fence_t::consumer), f3(fence_t::consumer);
+	lvldb::seq_t s;
 
+	while (true) {
+		f->acquire_slot(s);
+		f->release_slot(s);
+
+		flockfile(stdout);
+		std::cout << "t4 s = " << s << std::endl;
+		funlockfile(stdout);
+	}
+}
+
+int main(int argc, char *argv[])
+{
+	lvldb::disruptor_t<long> d(4);
+	lvldb::fence_t<long>     f1(d, lvldb::fence_t<long>::producer), f2(d, lvldb::fence_t<long>::consumer);
+	lvldb::fence_t<long>     f3(d, lvldb::fence_t<long>::consumer), f4(d, lvldb::fence_t<long>::consumer);
+
+	f4.set_next_fence(&f3);
 	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);
-	f1.set_next_fence(&f3);
+	f1.set_next_fence(&f4);
 
+	std::thread t4(&fun4, &f4);
 	std::thread t3(&fun3, &f3);
 	std::thread t2(&fun2, &f2);
 	std::thread t1(&fun1, &f1);
@@ -213,6 +221,7 @@ int main()
 	t1.join();
 	t2.join();
 	t3.join();
+	t4.join();
 
 	return 0;
 }
