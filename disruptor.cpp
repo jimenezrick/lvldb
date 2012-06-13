@@ -1,4 +1,5 @@
 #include <memory>
+#include <thread>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -47,18 +48,6 @@ class disruptor_t
 	std::unique_ptr<T[]> ring_;
 };
 
-class task_t
-{
-	// XXX XXX XXX
-	// XXX XXX XXX
-	// XXX XXX XXX
-	//
-	// Usar aqui acquire_slot() y release_slot()
-	// Implementar un metodo virtual que trabaje sobre el slot
-	//
-	// Seguir con el ejemplo y que cada thread modifique el slot del ring y comprobar
-};
-
 template<typename T>
 class fence_t
 {
@@ -71,7 +60,8 @@ class fence_t
 		next_(0),
 		disruptor_(disruptor),
 		type_(type),
-		next_fence_(nullptr)
+		next_fence_(nullptr),
+		stop_(false)
 	{
 		long line_size;
 
@@ -88,7 +78,7 @@ class fence_t
 		next_fence_ = next_fence;
 	}
 
-	inline T acquire_slot(seq_t &task_seq)
+	inline T &acquire_slot(seq_t &task_seq)
 	{
 		if (type_ == producer && next_ == 0) {
 			seq_t expected = 0;
@@ -140,11 +130,12 @@ class fence_t
 
 	private:
 
-	char            padding_[64];
-	atomic_seq_t    seq_, next_;
-	disruptor_t<T> &disruptor_;
-	const type_t    type_;
-	const fence_t  *next_fence_;
+	char              padding_[64];
+	atomic_seq_t      seq_, next_;
+	disruptor_t<T>   &disruptor_;
+	const type_t      type_;
+	const fence_t    *next_fence_;
+	std::atomic<bool> stop_;
 
 	inline void pause_thread()
 	{
@@ -166,10 +157,59 @@ class fence_t
 	}
 };
 
+template<typename T>
+class task_t
+{
+	//
+	// XXX: Usar pthreads
+	//
+
+	public:
+
+	task_t(fence_t<T> &fence):
+		fence_(fence)
+	{ }
+
+	void start()
+	{
+		thread_ = std::thread(&task_t::run, this);
+	}
+
+	void stop()
+	{
+		// XXX: Avisar al thread para que pare
+		thread_.join();
+	}
+
+	inline void run()
+	{
+		T &slot;
+
+		slot = fence_.acquire_slot(seq_);
+		process_slot(slot);
+		fence_.release_slot(seq_);
+	}
+
+	virtual void process_slot(T &slot) = 0;
+
+	private:
+
+	seq_t       seq_;
+	fence_t<T> &fence_;
+	std::thread thread_;
+
+	// XXX XXX XXX
+	//
+	// Seguir con el ejemplo y que cada thread modifique el slot del ring y comprobar
+	//
+	// Hacer un benchmark contra un ring con un mutex en cada slot
+	//
+	// XXX XXX XXX
+};
+
 }
 
 #include <iostream>
-#include <thread>
 
 void fun1(lvldb::fence_t<long> *f)
 {
