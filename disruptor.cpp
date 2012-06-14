@@ -350,8 +350,11 @@ class task4_t: public lvldb::task_t<T>
 
 // XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
 //
-// Hacer un benchmark contra un ring con un mutex en cada slot
-// Implementar un fence_mutex_t???
+// Implementar mutex_fence_t y renombrar el otro a atomic_fence_t
+//
+// Hacer un benchmark con mutex_fence_t y en cada slot que se calcule
+// varias iteraciones de MurmurHash para que tarde. El productor coge
+// datos de algun sitio?
 //
 // XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
 
