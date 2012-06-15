@@ -2,17 +2,17 @@
 
 #include "disruptor.hpp"
 
-template<typename T>
-class task1_t: public lvldb::task_t<T>
+template<typename Fence>
+class task1_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task1_t(lvldb::fence_t<T> &fence):
-		lvldb::task_t<T>(fence),
+	task1_t(Fence &fence):
+		lvldb::task_t<Fence>(fence),
 		initialized_(false)
 	{ }
 
-	void process_slot(T &slot)
+	void process_slot(typename Fence::slot_t &slot)
 	{
 		if (slot != 0)
 			initialized_ = true;
@@ -35,16 +35,16 @@ class task1_t: public lvldb::task_t<T>
 	bool initialized_;
 };
 
-template<typename T>
-class task2_t: public lvldb::task_t<T>
+template<typename Fence>
+class task2_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task2_t(lvldb::fence_t<T> &fence):
-		lvldb::task_t<T>(fence)
+	task2_t(Fence &fence):
+		lvldb::task_t<Fence>(fence)
 	{ }
 
-	void process_slot(T &slot)
+	void process_slot(typename Fence::slot_t &slot)
 	{
 		if (this->seq_ > 0)
 			assert(slot > 0);
@@ -60,16 +60,16 @@ class task2_t: public lvldb::task_t<T>
 	}
 };
 
-template<typename T>
-class task3_t: public lvldb::task_t<T>
+template<typename Fence>
+class task3_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task3_t(lvldb::fence_t<T> &fence):
-		lvldb::task_t<T>(fence)
+	task3_t(Fence &fence):
+		lvldb::task_t<Fence>(fence)
 	{ }
 
-	void process_slot(T &slot)
+	void process_slot(typename Fence::slot_t &slot)
 	{
 		if (this->seq_ > 0)
 			assert(slot > 0);
@@ -85,16 +85,16 @@ class task3_t: public lvldb::task_t<T>
 	}
 };
 
-template<typename T>
-class task4_t: public lvldb::task_t<T>
+template<typename Fence>
+class task4_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task4_t(lvldb::fence_t<T> &fence):
-		lvldb::task_t<T>(fence)
+	task4_t(Fence &fence):
+		lvldb::task_t<Fence>(fence)
 	{ }
 
-	void process_slot(T &slot)
+	void process_slot(typename Fence::slot_t &slot)
 	{
 		if (this->seq_ > 0)
 			assert(slot > 0);
@@ -111,27 +111,25 @@ class task4_t: public lvldb::task_t<T>
 	}
 };
 
-// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
-//
-// Implementar mutex_fence_t y renombrar el otro a atomic_fence_t
-//
-// Hacer un benchmark con mutex_fence_t y en cada slot que se calcule
-// varias iteraciones de MurmurHash para que tarde. El productor coge
-// datos de algun sitio?
-//
-// XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX XXX
-
 int main(int argc, char *argv[])
 {
-	lvldb::disruptor_t<long> d(8);
-	lvldb::fence_t<long>     f1(d, lvldb::fence_t<long>::producer);
-	lvldb::fence_t<long>     f2(d, lvldb::fence_t<long>::consumer);
-	lvldb::fence_t<long>     f3(d, lvldb::fence_t<long>::consumer);
+	typedef lvldb::disruptor_t<long>           disruptor_t;
+	typedef lvldb::atomic_fence_t<disruptor_t> fence_t;
 
-	task1_t<long> t1(f1);
-	task2_t<long> t2(f2);
-	task3_t<long> t3(f2);
-	task4_t<long> t4(f3);
+	typedef task1_t<fence_t> task1_t;
+	typedef task2_t<fence_t> task2_t;
+	typedef task3_t<fence_t> task3_t;
+	typedef task4_t<fence_t> task4_t;
+
+	disruptor_t d(8);
+	fence_t     f1(d, fence_t::producer);
+	fence_t     f2(d, fence_t::consumer);
+	fence_t     f3(d, fence_t::consumer);
+
+	task1_t t1(f1);
+	task2_t t2(f2);
+	task3_t t3(f2);
+	task4_t t4(f3);
 
 	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);

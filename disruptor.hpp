@@ -14,14 +14,16 @@ namespace lvldb
 typedef unsigned long      seq_t;
 typedef std::atomic<seq_t> atomic_seq_t;
 
-template<typename T>
+template<typename Slot>
 class disruptor_t
 {
 	public:
 
+	typedef Slot slot_t;
+
 	disruptor_t(size_t size):
 		size_(size),
-		ring_(std::unique_ptr<T[]>(new T[size]()))
+		ring_(std::unique_ptr<slot_t[]>(new slot_t[size]()))
 	{
 		// Test if size is a power of two
 		assert((size & (size - 1)) == 0);
@@ -33,39 +35,33 @@ class disruptor_t
 		return seq & (size_ - 1);
 	}
 
-	inline T operator[](seq_t seq) const
+	inline slot_t operator[](seq_t seq) const
 	{
 		return ring_[get_index(seq)];
 	}
 
-	inline T &operator[](seq_t seq)
+	inline slot_t &operator[](seq_t seq)
 	{
 		return ring_[get_index(seq)];
 	}
 
 	private:
 
-	const size_t         size_;
-	std::unique_ptr<T[]> ring_;
+	const size_t              size_;
+	std::unique_ptr<slot_t[]> ring_;
 };
 
-template<typename T>
+template<typename Disr>
 class fence_t
 {
 	public:
 
+	typedef typename Disr::slot_t slot_t;
 	enum type_t {producer, consumer};
 
-	fence_t(disruptor_t<T> &disruptor, type_t type,
-		int atomic_retries = 4, int atomic_sleep = 100):
-		seq_(0),
-		next_(0),
+	fence_t(Disr &disruptor, type_t type):
 		disruptor_(disruptor),
-		type_(type),
-		next_fence_(nullptr),
-		atomic_retries_(atomic_retries),
-		atomic_sleep_(atomic_sleep),
-		stop_tasks_(false)
+		type_(type)
 	{
 		long line_size;
 
@@ -82,26 +78,53 @@ class fence_t
 		next_fence_ = next_fence;
 	}
 
-	inline T &acquire_slot(seq_t &task_seq)
+	virtual slot_t &acquire_slot(seq_t &task_seq) = 0;
+	virtual void release_slot(seq_t task_seq) = 0;
+
+	protected:
+
+	char           padding_[64];
+	Disr          &disruptor_;
+	const type_t   type_;
+	const fence_t *next_fence_;
+};
+
+template<typename Disr>
+class atomic_fence_t: public fence_t<Disr>
+{
+	public:
+
+	typedef typename Disr::slot_t slot_t;
+
+	atomic_fence_t(Disr &disruptor, typename fence_t<Disr>::type_t type,
+		       int atomic_retries = 4, int atomic_sleep = 100):
+		fence_t<Disr>(disruptor, type),
+		seq_(0),
+		next_(0),
+		atomic_retries_(atomic_retries),
+		atomic_sleep_(atomic_sleep)
+	{ }
+
+	inline slot_t &acquire_slot(seq_t &task_seq)
 	{
-		if (type_ == producer && next_ == 0) {
+		if (this->type_ == fence_t<Disr>::producer && next_ == 0) {
 			seq_t expected = 0;
 
 			if (next_.compare_exchange_strong(expected, 1)) {
 				task_seq = 0;
 
-				return disruptor_[task_seq];
+				return this->disruptor_[task_seq];
 			}
 		}
 
 		check_consistency();
 
 		while (true) {
-			int pauses = 0;
-			seq_t next = next_;
+			int   pauses = 0;
+			seq_t next   = next_;
 
-			while (disruptor_.get_index(next) ==
-			       disruptor_.get_index(next_fence_->seq_))
+			while (this->disruptor_.get_index(next) ==
+			       this->disruptor_.get_index(next_fence()->seq_))
 				pause_thread(pauses);
 
 			if (!next_.compare_exchange_strong(next, next + 1))
@@ -113,19 +136,19 @@ class fence_t
 
 		check_consistency();
 
-		return disruptor_[task_seq];
+		return this->disruptor_[task_seq];
 	}
 
 	inline void release_slot(seq_t task_seq)
 	{
-		int pauses;
+		int   pauses;
 		seq_t expected;
 
 		check_consistency();
 
 		pauses = 0;
-		while (disruptor_.get_index(task_seq + 1) ==
-		       disruptor_.get_index(next_fence_->seq_))
+		while (this->disruptor_.get_index(task_seq + 1) ==
+		       this->disruptor_.get_index(next_fence()->seq_))
 			pause_thread(pauses);
 
 		pauses = 0;
@@ -138,21 +161,20 @@ class fence_t
 		check_consistency();
 	}
 
-	void stop_tasks()
-	{
-		stop_tasks_ = true;
-	}
-
 	private:
 
-	char              padding_[64];
 	atomic_seq_t      seq_, next_;
-	disruptor_t<T>   &disruptor_;
-	const type_t      type_;
-	const fence_t    *next_fence_;
 	const int         atomic_retries_;
 	const int         atomic_sleep_; // Milliseconds
-	std::atomic<bool> stop_tasks_;
+
+	inline const atomic_fence_t *next_fence()
+	{
+		const atomic_fence_t *fence = dynamic_cast<const atomic_fence_t *>(this->next_fence_);
+
+		assert(fence != nullptr);
+
+		return fence;
+	}
 
 	inline void pause_thread(int &pauses)
 	{
@@ -161,8 +183,7 @@ class fence_t
 		else {
 			struct timespec req = {0, atomic_sleep_ * 1000 * 1000};
 
-			if (stop_tasks_)
-				pthread_exit(nullptr);
+			pthread_testcancel();
 
 			if (nanosleep(&req, nullptr) == -1) {
 				perror("nanosleep");
@@ -176,18 +197,34 @@ class fence_t
 	inline void check_consistency()
 	{
 		assert(seq_ <= next_);
-		assert(next_fence_ != nullptr);
-		assert(seq_ != 0 ? seq_ != next_fence_->seq_ : true);
-		assert(type_ == producer ? next_fence_->type_ == consumer : true);
+		assert(this->next_fence_ != nullptr);
+		assert(seq_ != 0 ? seq_ != next_fence()->seq_ : true);
+		assert(this->type_ == fence_t<Disr>::producer ?
+		       next_fence()->type_ == fence_t<Disr>::consumer : true);
 	}
 };
 
-template<typename T>
+// XXX XXX XXX
+//template<typename Disr>
+//class mutex_fence_t: public fence_t<Disr>
+//{
+//        private:
+
+//        char            padding_[64];
+//        seq_t           seq_;
+//        pthread_mutex_t seq_mutex_ = PTHREAD_MUTEX_INITIALIZER;
+//        pthread_cond_t  seq_cond_  = PTHREAD_COND_INITIALIZER;
+//};
+// XXX XXX XXX
+
+template<typename Fence>
 class task_t
 {
 	public:
 
-	task_t(fence_t<T> &fence):
+	typedef typename Fence::slot_t slot_t;
+
+	task_t(Fence &fence):
 		fence_(fence)
 	{ }
 
@@ -208,7 +245,10 @@ class task_t
 
 	void stop()
 	{
-		fence_.stop_tasks();
+		if (pthread_cancel(thread_) != 0) {
+			perror("pthread_cancel");
+			exit(EXIT_FAILURE);
+		}
 
 		if (pthread_join(thread_, nullptr) != 0) {
 			perror("pthread_join");
@@ -219,7 +259,9 @@ class task_t
 	inline void run()
 	{
 		while (true) {
-			T &slot = fence_.acquire_slot(seq_);
+			pthread_testcancel();
+
+			slot_t &slot = fence_.acquire_slot(seq_);
 
 			process_slot(slot);
 			fence_.release_slot(seq_);
@@ -228,11 +270,11 @@ class task_t
 
 	protected:
 
-	seq_t       seq_;
-	fence_t<T> &fence_;
-	pthread_t   thread_;
+	seq_t     seq_;
+	Fence    &fence_;
+	pthread_t thread_;
 
-	virtual void process_slot(T &slot) = 0;
+	virtual void process_slot(slot_t &slot) = 0;
 };
 
 }
