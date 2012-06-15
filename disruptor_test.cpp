@@ -24,10 +24,18 @@ class task1_t: public lvldb::task_t<Fence>
 
 		slot = this->seq_ * 4;
 
+#ifndef NO_OUTPUT
 		flockfile(stdout);
 		std::cout << "task 1 seq = " << this->seq_;
 		std::cout << " slot = "      << slot << std::endl;
 		funlockfile(stdout);
+#endif
+	}
+
+	void stop()
+	{
+		lvldb::task_t<Fence>::stop();
+		std::cout << "task 1 seq = " << this->seq_ << std::endl;
 	}
 
 	private:
@@ -53,10 +61,18 @@ class task2_t: public lvldb::task_t<Fence>
 
 		slot = this->seq_ * 4 + 1;
 
+#ifndef NO_OUTPUT
 		flockfile(stdout);
 		std::cout << "task 2 seq = " << this->seq_;
 		std::cout << " slot = "      << slot << std::endl;
 		funlockfile(stdout);
+#endif
+	}
+
+	void stop()
+	{
+		lvldb::task_t<Fence>::stop();
+		std::cout << "task 2 seq = " << this->seq_ << std::endl;
 	}
 };
 
@@ -78,10 +94,18 @@ class task3_t: public lvldb::task_t<Fence>
 
 		slot = this->seq_ * 4 + 2;
 
+#ifndef NO_OUTPUT
 		flockfile(stdout);
 		std::cout << "task 3 seq = " << this->seq_;
 		std::cout << " slot = "      << slot << std::endl;
 		funlockfile(stdout);
+#endif
+	}
+
+	void stop()
+	{
+		lvldb::task_t<Fence>::stop();
+		std::cout << "task 3 seq = " << this->seq_ << std::endl;
 	}
 };
 
@@ -104,10 +128,18 @@ class task4_t: public lvldb::task_t<Fence>
 
 		slot = this->seq_ * 4 + 3;
 
+#ifndef NO_OUTPUT
 		flockfile(stdout);
 		std::cout << "task 4 seq = " << this->seq_;
 		std::cout << " slot = "      << slot << std::endl;
 		funlockfile(stdout);
+#endif
+	}
+
+	void stop()
+	{
+		lvldb::task_t<Fence>::stop();
+		std::cout << "task 4 seq = " << this->seq_ << std::endl;
 	}
 };
 
