@@ -224,8 +224,9 @@ class task_t
 
 	typedef typename Fence::slot_t slot_t;
 
-	task_t(Fence &fence):
-		fence_(fence)
+	task_t(Fence &fence, int test_cancel_iters = 64):
+		fence_(fence),
+		test_cancel_iters_(test_cancel_iters)
 	{ }
 
 	static void *start_thread(void *arg)
@@ -258,8 +259,14 @@ class task_t
 
 	inline void run()
 	{
+		int iters = 1;
+
 		while (true) {
-			pthread_testcancel();
+			if (iters == test_cancel_iters_) {
+				pthread_testcancel();
+				iters = 1;
+			} else
+				iters++;
 
 			slot_t &slot = fence_.acquire_slot(seq_);
 
@@ -273,6 +280,7 @@ class task_t
 	seq_t     seq_;
 	Fence    &fence_;
 	pthread_t thread_;
+	const int test_cancel_iters_;
 
 	virtual void process_slot(slot_t &slot) = 0;
 };
