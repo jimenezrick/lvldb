@@ -121,7 +121,13 @@ int main(int argc, char *argv[])
 	typedef task3_t<fence_t> task3_t;
 	typedef task4_t<fence_t> task4_t;
 
-	disruptor_t d(8);
+	if (argc != 2) {
+		std::cerr << "Usage: " << argv[0] << " <disruptor size>\n";
+
+		return EXIT_FAILURE;
+	}
+
+	disruptor_t d(std::stoi(argv[1]));
 	fence_t     f1(d, fence_t::producer);
 	fence_t     f2(d, fence_t::consumer);
 	fence_t     f3(d, fence_t::consumer);
