@@ -97,7 +97,7 @@ class atomic_fence_t: public fence_t<Disr>
 	typedef typename Disr::slot_t slot_t;
 
 	atomic_fence_t(Disr &disruptor, typename fence_t<Disr>::type_t type,
-		       int atomic_retries = 4, int atomic_sleep = 100):
+		       int atomic_retries = 32, int atomic_sleep = 25):
 		fence_t<Disr>(disruptor, type),
 		seq_(0),
 		next_(0),
@@ -151,12 +151,12 @@ class atomic_fence_t: public fence_t<Disr>
 		check_consistency();
 
 		pauses = 0;
-		while (this->disruptor_.get_index(task_seq + 1) ==
-		       this->disruptor_.get_index(next_fence()->seq_))
+		while (seq_ != task_seq)
 			pause_thread(pauses);
 
 		pauses = 0;
-		while (seq_ != task_seq)
+		while (this->disruptor_.get_index(task_seq + 1) ==
+		       this->disruptor_.get_index(next_fence()->seq_))
 			pause_thread(pauses);
 
 		seq_ = task_seq + 1;
@@ -228,7 +228,7 @@ class task_t
 
 	typedef typename Fence::slot_t slot_t;
 
-	task_t(Fence &fence, int test_cancel_iters = 64):
+	task_t(Fence &fence, int test_cancel_iters = 256):
 		fence_(fence),
 		test_cancel_iters_(test_cancel_iters)
 	{ }
