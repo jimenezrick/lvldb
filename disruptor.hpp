@@ -141,8 +141,7 @@ class atomic_fence_t: public fence_t<Disr>
 
 	inline void release_slot(seq_t task_seq)
 	{
-		int   pauses;
-		seq_t expected;
+		int pauses;
 
 		check_consistency();
 
@@ -152,11 +151,10 @@ class atomic_fence_t: public fence_t<Disr>
 			pause_thread(pauses);
 
 		pauses = 0;
-		expected = task_seq;
-		while (!seq_.compare_exchange_strong(expected, task_seq + 1)) {
-			expected = task_seq;
+		while (seq_ != task_seq)
 			pause_thread(pauses);
-		}
+
+		seq_ = task_seq + 1;
 
 		check_consistency();
 	}
