@@ -105,7 +105,7 @@ class atomic_fence_t: public fence_t<Disr>
 		atomic_sleep_(atomic_sleep)
 	{ }
 
-	inline slot_t &acquire_slot(seq_t &task_seq)
+	slot_t &initial_acquire_slot(seq_t &task_seq)
 	{
 		if (this->type_ == fence_t<Disr>::producer && next_ == 0) {
 			seq_t expected = 0;
@@ -117,6 +117,11 @@ class atomic_fence_t: public fence_t<Disr>
 			}
 		}
 
+		return acquire_slot(task_seq);
+	}
+
+	slot_t &acquire_slot(seq_t &task_seq)
+	{
 		check_consistency();
 
 		while (true) {
@@ -139,7 +144,7 @@ class atomic_fence_t: public fence_t<Disr>
 		return this->disruptor_[task_seq];
 	}
 
-	inline void release_slot(seq_t task_seq)
+	void release_slot(seq_t task_seq)
 	{
 		int pauses;
 
@@ -256,21 +261,22 @@ class task_t
 		}
 	}
 
-	inline void run()
+	void run()
 	{
-		int iters = 1;
+		slot_t &slot = fence_.initial_acquire_slot(seq_);
+
+		process_slot(slot);
+		fence_.release_slot(seq_);
 
 		while (true) {
-			if (iters == test_cancel_iters_) {
-				pthread_testcancel();
-				iters = 1;
-			} else
-				iters++;
+			for (int i = 0; i < test_cancel_iters_; i++) {
+				slot_t &slot = fence_.acquire_slot(seq_);
 
-			slot_t &slot = fence_.acquire_slot(seq_);
+				process_slot(slot);
+				fence_.release_slot(seq_);
+			}
 
-			process_slot(slot);
-			fence_.release_slot(seq_);
+			pthread_testcancel();
 		}
 	}
 
