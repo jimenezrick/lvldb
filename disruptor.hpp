@@ -173,9 +173,9 @@ class atomic_fence_t: public fence_t<Disr>
 	inline const atomic_fence_t *next_fence()
 	{
 		const atomic_fence_t *fence =
-			dynamic_cast<const atomic_fence_t *>(this->next_fence_);
+			static_cast<const atomic_fence_t *>(this->next_fence_);
 
-		assert(fence != nullptr);
+		assert(dynamic_cast<const atomic_fence_t *>(this->next_fence_) != nullptr);
 
 		return fence;
 	}
