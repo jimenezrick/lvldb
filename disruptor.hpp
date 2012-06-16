@@ -1,5 +1,7 @@
+#include <vector>
 #include <memory>
 #include <atomic>
+#include <limits>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -13,6 +15,20 @@ namespace lvldb
 
 typedef unsigned long      seq_t;
 typedef std::atomic<seq_t> atomic_seq_t;
+
+const seq_t max_seq = std::numeric_limits<seq_t>::max();
+
+void check_cache_overlap(size_t type_size)
+{
+	long line_size;
+
+	if ((line_size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE)) == -1) {
+		perror("sysconf");
+		exit(EXIT_FAILURE);
+	}
+
+	assert(type_size >= static_cast<size_t>(line_size));
+}
 
 template<typename Slot>
 class disruptor_t
@@ -62,32 +78,25 @@ class fence_t
 	fence_t(Disr &disruptor, type_t type):
 		disruptor_(disruptor),
 		type_(type)
-	{
-		long line_size;
-
-		if ((line_size = sysconf(_SC_LEVEL1_DCACHE_LINESIZE)) == -1) {
-			perror("sysconf");
-			exit(EXIT_FAILURE);
-		}
-
-		assert(sizeof(fence_t) >= static_cast<size_t>(line_size));
-	}
+	{ }
 
 	void set_next_fence(const fence_t *next_fence)
 	{
 		next_fence_ = next_fence;
 	}
 
-	virtual slot_t &acquire_slot(seq_t &task_seq) = 0;
-	virtual void release_slot(seq_t task_seq) = 0;
+	virtual slot_t &acquire_slot(atomic_seq_t &task_seq) = 0;
+	virtual void release_slot(atomic_seq_t &task_seq) = 0;
 
 	protected:
 
-	char           padding_[64];
 	Disr          &disruptor_;
 	const type_t   type_;
 	const fence_t *next_fence_;
 };
+
+template<typename Fence>
+class task_t;
 
 template<typename Disr>
 class atomic_fence_t: public fence_t<Disr>
@@ -99,38 +108,55 @@ class atomic_fence_t: public fence_t<Disr>
 	atomic_fence_t(Disr &disruptor, typename fence_t<Disr>::type_t type,
 		       int atomic_retries = 32, int atomic_sleep = 25):
 		fence_t<Disr>(disruptor, type),
-		seq_(0),
 		next_(0),
 		atomic_retries_(atomic_retries),
 		atomic_sleep_(atomic_sleep)
-	{ }
-
-	slot_t &initial_acquire_slot(seq_t &task_seq)
 	{
-		if (this->type_ == fence_t<Disr>::producer && next_ == 0) {
-			seq_t expected = 0;
-
-			if (next_.compare_exchange_strong(expected, 1)) {
-				task_seq = 0;
-
-				return this->disruptor_[task_seq];
-			}
-		}
-
-		return acquire_slot(task_seq);
+		check_cache_overlap(sizeof(atomic_fence_t));
 	}
 
-	slot_t &acquire_slot(seq_t &task_seq)
+	void add_task(const task_t<atomic_fence_t<Disr>> &task)
+	{
+		seqs_.push_back(task.seq());
+	}
+
+	slot_t &acquire_slot(atomic_seq_t &task_seq)
 	{
 		check_consistency();
 
 		while (true) {
-			int   pauses = 0;
-			seq_t next   = next_;
+			int   pauses  = 0;
+			seq_t next    = next_;
 
-			while (this->disruptor_.get_index(next) ==
-			       this->disruptor_.get_index(next_fence()->seq_))
-				pause_thread(pauses);
+			if (this->type_ == fence_t<Disr>::producer) {
+				while (true) {
+					seq_t min_seq = next_fence()->min_seq();
+
+					if ((this->disruptor_.get_index(next) ==
+					     this->disruptor_.get_index(min_seq) &&
+					     min_seq != max_seq) ||
+					    (this->disruptor_.get_index(next) == 0 &&
+					     next > 0 && min_seq == max_seq)) {
+						if (task_seq != max_seq)
+							task_seq.store(next_.load());
+
+						pause_thread(pauses);
+					} else
+						break;
+				}
+			} else {
+				while (true) {
+					seq_t min_seq = next_fence()->min_seq();
+
+					if (next == min_seq || min_seq == max_seq) {
+						if (task_seq != max_seq)
+							task_seq.store(next_.load());
+
+						pause_thread(pauses);
+					} else
+						break;
+				}
+			}
 
 			if (!next_.compare_exchange_strong(next, next + 1))
 				continue;
@@ -144,31 +170,29 @@ class atomic_fence_t: public fence_t<Disr>
 		return this->disruptor_[task_seq];
 	}
 
-	void release_slot(seq_t task_seq)
+	inline void release_slot(atomic_seq_t &task_seq)
 	{
-		int pauses;
+		seq_t next   = next_;
+		int   pauses = 0;
 
 		check_consistency();
 
-		pauses = 0;
-		while (seq_ != task_seq)
+		while (this->disruptor_.get_index(next) ==
+		       this->disruptor_.get_index(next_fence()->min_seq()))
 			pause_thread(pauses);
 
-		pauses = 0;
-		while (this->disruptor_.get_index(task_seq + 1) ==
-		       this->disruptor_.get_index(next_fence()->seq_))
-			pause_thread(pauses);
-
-		seq_ = task_seq + 1;
+		task_seq = next;
 
 		check_consistency();
 	}
 
 	private:
 
-	atomic_seq_t seq_, next_;
-	const int    atomic_retries_;
-	const int    atomic_sleep_; // Milliseconds
+	char                              padding_[64];
+	atomic_seq_t                      next_;
+	const int                         atomic_retries_;
+	const int                         atomic_sleep_; // Milliseconds
+	std::vector<const atomic_seq_t *> seqs_;
 
 	inline const atomic_fence_t *next_fence()
 	{
@@ -198,13 +222,30 @@ class atomic_fence_t: public fence_t<Disr>
 		pauses++;
 	}
 
+	seq_t min_seq() const
+	{
+		seq_t min = max_seq;
+
+		assert(seqs_.size() > 0);
+
+		for (const atomic_seq_t *pseq : seqs_) {
+			seq_t seq = std::atomic_load(pseq);
+
+			min = seq < min ? seq : min;
+		}
+
+		return min;
+	}
+
 	inline void check_consistency()
 	{
-		assert(seq_ <= next_);
-		assert(this->next_fence_ != nullptr);
-		assert(seq_ != 0 ? seq_ != next_fence()->seq_ : true);
 		assert(this->type_ == fence_t<Disr>::producer ?
 		       next_fence()->type_ == fence_t<Disr>::consumer : true);
+		assert(this->next_fence_ != nullptr);
+#ifndef NDEBUG
+		for (const atomic_seq_t *pseq : seqs_)
+			assert(std::atomic_load(pseq) <= next_ || std::atomic_load(pseq) == max_seq);
+#endif
 	}
 };
 
@@ -229,15 +270,11 @@ class task_t
 	typedef typename Fence::slot_t slot_t;
 
 	task_t(Fence &fence, int test_cancel_iters = 256):
+		seq_(max_seq),
 		fence_(fence),
 		test_cancel_iters_(test_cancel_iters)
-	{ }
-
-	static void *start_thread(void *arg)
 	{
-		static_cast<task_t *>(arg)->run();
-
-		return nullptr;
+		check_cache_overlap(sizeof(task_t));
 	}
 
 	void start()
@@ -261,13 +298,35 @@ class task_t
 		}
 	}
 
+	const atomic_seq_t *seq() const
+	{
+		return &seq_;
+	}
+
+	protected:
+
+	seq_t seq()
+	{
+		return seq_;
+	}
+
+	private:
+
+	char         padding_[64];
+	atomic_seq_t seq_;
+	Fence       &fence_;
+	pthread_t    thread_;
+	const int    test_cancel_iters_;
+
+	static void *start_thread(void *arg)
+	{
+		static_cast<task_t *>(arg)->run();
+
+		return nullptr;
+	}
+
 	void run()
 	{
-		slot_t &slot = fence_.initial_acquire_slot(seq_);
-
-		process_slot(slot);
-		fence_.release_slot(seq_);
-
 		while (true) {
 			for (int i = 0; i < test_cancel_iters_; i++) {
 				slot_t &slot = fence_.acquire_slot(seq_);
@@ -279,13 +338,6 @@ class task_t
 			pthread_testcancel();
 		}
 	}
-
-	protected:
-
-	seq_t     seq_;
-	Fence    &fence_;
-	pthread_t thread_;
-	const int test_cancel_iters_;
 
 	virtual void process_slot(slot_t &slot) = 0;
 };

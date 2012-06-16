@@ -14,6 +14,8 @@ class task1_t: public lvldb::task_t<Fence>
 
 	void process_slot(typename Fence::slot_t &slot)
 	{
+		lvldb::seq_t seq0 = this->seq();
+
 		if (slot != 0)
 			initialized_ = true;
 
@@ -22,10 +24,10 @@ class task1_t: public lvldb::task_t<Fence>
 		else
 			assert(slot == 0);
 
-		slot = this->seq_ * 4;
+		slot = seq0 * 4;
 
 #ifndef NO_OUTPUT
-		std::cout << "task 1 seq = " << this->seq_;
+		std::cout << "task 1 seq = " << seq0;
 		std::cout << " slot = "      << slot << std::endl;
 #endif
 	}
@@ -33,7 +35,7 @@ class task1_t: public lvldb::task_t<Fence>
 	void stop()
 	{
 		lvldb::task_t<Fence>::stop();
-		std::cerr << "finished task 1 seq = " << this->seq_ << std::endl;
+		std::cerr << "finished task 1 seq = " << this->seq() << std::endl;
 	}
 
 	private:
@@ -52,15 +54,17 @@ class task2_t: public lvldb::task_t<Fence>
 
 	void process_slot(typename Fence::slot_t &slot)
 	{
-		if (this->seq_ > 0)
+		lvldb::seq_t seq0 = this->seq();
+
+		if (seq0 > 0)
 			assert(slot > 0);
 
-		assert(static_cast<size_t>(slot) == this->seq_ * 4);
+		assert(static_cast<size_t>(slot) == seq0 * 4);
 
-		slot = this->seq_ * 4 + 1;
+		slot = seq0 * 4 + 1;
 
 #ifndef NO_OUTPUT
-		std::cout << "task 2 seq = " << this->seq_;
+		std::cout << "task 2 seq = " << seq0;
 		std::cout << " slot = "      << slot << std::endl;
 #endif
 	}
@@ -68,7 +72,7 @@ class task2_t: public lvldb::task_t<Fence>
 	void stop()
 	{
 		lvldb::task_t<Fence>::stop();
-		std::cerr << "finished task 2 seq = " << this->seq_ << std::endl;
+		std::cerr << "finished task 2 seq = " << this->seq() << std::endl;
 	}
 };
 
@@ -83,15 +87,17 @@ class task3_t: public lvldb::task_t<Fence>
 
 	void process_slot(typename Fence::slot_t &slot)
 	{
-		if (this->seq_ > 0)
+		lvldb::seq_t seq0 = this->seq();
+
+		if (seq0 > 0)
 			assert(slot > 0);
 
-		assert(static_cast<size_t>(slot) == this->seq_ * 4);
+		assert(static_cast<size_t>(slot) == seq0 * 4);
 
-		slot = this->seq_ * 4 + 2;
+		slot = seq0 * 4 + 2;
 
 #ifndef NO_OUTPUT
-		std::cout << "task 3 seq = " << this->seq_;
+		std::cout << "task 3 seq = " << seq0;
 		std::cout << " slot = "      << slot << std::endl;
 #endif
 	}
@@ -99,7 +105,7 @@ class task3_t: public lvldb::task_t<Fence>
 	void stop()
 	{
 		lvldb::task_t<Fence>::stop();
-		std::cerr << "finished task 3 seq = " << this->seq_ << std::endl;
+		std::cerr << "finished task 3 seq = " << this->seq() << std::endl;
 	}
 };
 
@@ -114,16 +120,18 @@ class task4_t: public lvldb::task_t<Fence>
 
 	void process_slot(typename Fence::slot_t &slot)
 	{
-		if (this->seq_ > 0)
+		lvldb::seq_t seq0 = this->seq();
+
+		if (seq0 > 0)
 			assert(slot > 0);
 
-		assert(static_cast<size_t>(slot) == this->seq_ * 4 + 1 ||
-		       static_cast<size_t>(slot) == this->seq_ * 4 + 2);
+		assert(static_cast<size_t>(slot) == seq0 * 4 + 1 ||
+		       static_cast<size_t>(slot) == seq0 * 4 + 2);
 
-		slot = this->seq_ * 4 + 3;
+		slot = seq0 * 4 + 3;
 
 #ifndef NO_OUTPUT
-		std::cout << "task 4 seq = " << this->seq_;
+		std::cout << "task 4 seq = " << seq0;
 		std::cout << " slot = "      << slot << std::endl;
 #endif
 	}
@@ -131,7 +139,7 @@ class task4_t: public lvldb::task_t<Fence>
 	void stop()
 	{
 		lvldb::task_t<Fence>::stop();
-		std::cerr << "finished task 4 seq = " << this->seq_ << std::endl;
+		std::cerr << "finished task 4 seq = " << this->seq() << std::endl;
 	}
 };
 
@@ -164,6 +172,11 @@ int main(int argc, char *argv[])
 	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);
 	f1.set_next_fence(&f3);
+
+	f1.add_task(t1);
+	f2.add_task(t2);
+	f2.add_task(t3);
+	f3.add_task(t4);
 
 	t1.start();
 	t2.start();
