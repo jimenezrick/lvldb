@@ -163,13 +163,14 @@ class atomic_fence_t: public fence_t<Disr>
 
 	private:
 
-	atomic_seq_t      seq_, next_;
-	const int         atomic_retries_;
-	const int         atomic_sleep_; // Milliseconds
+	atomic_seq_t seq_, next_;
+	const int    atomic_retries_;
+	const int    atomic_sleep_; // Milliseconds
 
 	inline const atomic_fence_t *next_fence()
 	{
-		const atomic_fence_t *fence = dynamic_cast<const atomic_fence_t *>(this->next_fence_);
+		const atomic_fence_t *fence =
+			dynamic_cast<const atomic_fence_t *>(this->next_fence_);
 
 		assert(fence != nullptr);
 
