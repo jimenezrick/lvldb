@@ -244,7 +244,8 @@ class atomic_fence_t: public fence_t<Disr>
 		assert(this->next_fence_ != nullptr);
 #ifndef NDEBUG
 		for (const atomic_seq_t *pseq : seqs_)
-			assert(std::atomic_load(pseq) <= next_ || std::atomic_load(pseq) == max_seq);
+			assert(std::atomic_load(pseq) <= next_ ||
+			       std::atomic_load(pseq) == max_seq);
 #endif
 	}
 };
