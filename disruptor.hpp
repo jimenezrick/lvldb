@@ -132,11 +132,8 @@ class atomic_fence_t: public fence_t<Disr>
 				while (true) {
 					seq_t min_seq = next_fence()->min_seq();
 
-					if ((this->disruptor_.get_index(next) ==
-					     this->disruptor_.get_index(min_seq) &&
-					     min_seq != max_seq) ||
-					    (this->disruptor_.get_index(next) == 0 &&
-					     next > 0 && min_seq == max_seq)) {
+					if (this->disruptor_.get_index(next) ==
+					    this->disruptor_.get_index(min_seq)) {
 						if (task_seq != max_seq)
 							task_seq.store(next_.load());
 
@@ -148,9 +145,7 @@ class atomic_fence_t: public fence_t<Disr>
 				while (true) {
 					seq_t min_seq = next_fence()->min_seq();
 
-					min_seq = min_seq != max_seq ? min_seq : 0;
-
-					if (next == min_seq) {
+					if (next == min_seq || min_seq != max_seq) {
 						if (task_seq != max_seq)
 							task_seq.store(next_.load());
 
