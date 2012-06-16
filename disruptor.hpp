@@ -125,8 +125,8 @@ class atomic_fence_t: public fence_t<Disr>
 		check_consistency();
 
 		while (true) {
-			int   pauses  = 0;
-			seq_t next    = next_;
+			int   pauses = 0;
+			seq_t next   = next_;
 
 			if (this->type_ == fence_t<Disr>::producer) {
 				while (true) {
@@ -148,7 +148,9 @@ class atomic_fence_t: public fence_t<Disr>
 				while (true) {
 					seq_t min_seq = next_fence()->min_seq();
 
-					if (next == min_seq || min_seq == max_seq) {
+					min_seq = min_seq != max_seq ? min_seq : 0;
+
+					if (next == min_seq) {
 						if (task_seq != max_seq)
 							task_seq.store(next_.load());
 

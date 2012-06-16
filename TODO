@@ -1,4 +1,1 @@
 - Batching de slots.
-- Dejar el acquire_slot() como esta.
-- Optimizar release_slot() poniendo el seq_ en cada task_t, es decir, el
-  seq_ de cada task_t que sea un atómico y se mire el min_seq().
