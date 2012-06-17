@@ -7,8 +7,8 @@ class task1_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task1_t(Fence &fence):
-		lvldb::task_t<Fence>(fence),
+	task1_t(Fence &fence, int acquire_slot_directly):
+		lvldb::task_t<Fence>(fence, acquire_slot_directly),
 		initialized_(false)
 	{ }
 
@@ -48,8 +48,8 @@ class task2_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task2_t(Fence &fence):
-		lvldb::task_t<Fence>(fence)
+	task2_t(Fence &fence, int acquire_slot_directly):
+		lvldb::task_t<Fence>(fence, acquire_slot_directly)
 	{ }
 
 	void process_slot(typename Fence::slot_t &slot)
@@ -81,8 +81,8 @@ class task3_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task3_t(Fence &fence):
-		lvldb::task_t<Fence>(fence)
+	task3_t(Fence &fence, int acquire_slot_directly):
+		lvldb::task_t<Fence>(fence, acquire_slot_directly)
 	{ }
 
 	void process_slot(typename Fence::slot_t &slot)
@@ -114,8 +114,8 @@ class task4_t: public lvldb::task_t<Fence>
 {
 	public:
 
-	task4_t(Fence &fence):
-		lvldb::task_t<Fence>(fence)
+	task4_t(Fence &fence, int acquire_slot_directly):
+		lvldb::task_t<Fence>(fence, acquire_slot_directly)
 	{ }
 
 	void process_slot(typename Fence::slot_t &slot)
@@ -164,10 +164,13 @@ int main(int argc, char *argv[])
 	fence_t     f2(d, fence_t::consumer);
 	fence_t     f3(d, fence_t::consumer);
 
-	task1_t t1(f1);
-	task2_t t2(f2);
-	task3_t t3(f2);
-	task4_t t4(f3);
+	task1_t t1(f1, 2);
+	sleep(1); // XXX: Algo como un mutex!
+	task2_t t2(f2, 1);
+	sleep(1);
+	task3_t t3(f2, 1);
+	sleep(1);
+	task4_t t4(f3, 1);
 
 	f3.set_next_fence(&f2);
 	f2.set_next_fence(&f1);

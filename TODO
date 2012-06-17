@@ -1,1 +1,3 @@
 - Batching de slots.
+- Arreglar el protocolo de preinicializacion!
+- Algo mejor que lo de signal_start() y wait_start().
