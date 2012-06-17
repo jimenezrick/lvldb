@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 	fence_t     f3(d, fence_t::consumer);
 
 	task1_t t1(f1, 2);
-	sleep(1); // XXX: Algo como un mutex!
+	sleep(1); // XXX: Algo como un mutex y una cond!
 	task2_t t2(f2, 1);
 	sleep(1);
 	task3_t t3(f2, 1);

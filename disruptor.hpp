@@ -268,6 +268,7 @@ class atomic_fence_t: public fence_t<Disr>
 		assert(this->type_ == fence_t<Disr>::producer ?
 		       next_fence()->type_ == fence_t<Disr>::consumer : true);
 		assert(this->next_fence_ != nullptr);
+		assert(next_ < max_seq);
 		assert(check_seqs());
 	}
 };

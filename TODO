@@ -1,3 +1,54 @@
 - Batching de slots.
-- Arreglar el protocolo de preinicializacion!
-- Algo mejor que lo de signal_start() y wait_start().
+- Habría que poner un mutex a la fence_t y cuando un thread se queda a
+  la espera de arrancar con signal_start(), que espera en una cond:
+
+  El constructor de task_t usa un mutex de fence_t y espera en cond:
+
+  class fence_t
+  {
+    mutex_t mutex;
+    cond_t cond;
+
+    signal_start()
+    {
+      pthread_signal(cond);
+    }
+
+    wait_start()
+    {
+      pthread_cond_wait(mutex, cond);
+    }
+
+    lock()
+    {
+      mutex.lock();
+    }
+  }
+
+  class task_t
+  {
+    mutex_t mutex;
+    cond_t cond;
+
+    task_t
+    {
+      fence.lock();
+      pthread_cond_wait(mutex, cond); // Nos aseguramos en el
+                                      // constructor antes de retornar
+				      // que el thread hace el
+				      // procesamiento inicial
+    }
+
+    run()
+    {
+      acquire_slot_directly...
+
+      pthread_signal(cond); // Desbloqueamos el constructor
+      fence.wait_start();
+    }
+
+    start()
+    {
+      fence.signal_start();
+    }
+  }
