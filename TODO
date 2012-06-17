@@ -52,3 +52,5 @@
       fence.signal_start();
     }
   }
+
+- Calcular de un modo automatico el numero de slots que cada task tiene que precomputar para meterse en el anillo.
