@@ -86,7 +86,9 @@ class fence_t
 	}
 
 	virtual slot_t &acquire_slot(atomic_seq_t &task_seq) = 0;
+	virtual slot_t &acquire_slot_directly(atomic_seq_t &task_seq) = 0;
 	virtual void release_slot(atomic_seq_t &task_seq) = 0;
+	virtual void release_slot_directly(atomic_seq_t &task_seq) = 0;
 
 	protected:
 
