@@ -1,3 +1,6 @@
+- En triqui con el ejemplo de 4 threads tenemos en prueba de 60 secs,
+  9,4 millones/sec.
+
 - Batching de slots.
 - Habría que poner un mutex a la fence_t y cuando un thread se queda a
   la espera de arrancar con signal_start(), que espera en una cond:

@@ -142,21 +142,25 @@ class atomic_fence_t: public fence_t<Disr>
 
 		while (true) {
 			int   pauses = 0;
-			seq_t next   = next_;
+			seq_t next;
 
 			if (this->type_ == fence_t<Disr>::producer) {
 				while (true) {
+					next = next_;
+
 					if (this->disruptor_.get_index(next) ==
 					    this->disruptor_.get_index(next_fence()->min_seq())) {
-						task_seq.store(next_.load());
+						task_seq = next;
 						pause_thread(pauses);
 					} else
 						break;
 				}
 			} else {
 				while (true) {
+					next = next_;
+
 					if (next == next_fence()->min_seq()) {
-						task_seq.store(next_.load());
+						task_seq = next;
 						pause_thread(pauses);
 					} else
 						break;
